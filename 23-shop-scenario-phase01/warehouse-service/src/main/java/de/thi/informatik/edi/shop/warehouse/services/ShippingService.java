@@ -1,10 +1,14 @@
 package de.thi.informatik.edi.shop.warehouse.services;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import de.thi.informatik.edi.shop.warehouse.connector.dto.ShippingDto;
+import de.thi.informatik.edi.shop.warehouse.connector.dto.ShippingItemDto;
+import de.thi.informatik.edi.shop.warehouse.model.ShippingItem;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
@@ -19,18 +23,31 @@ public class ShippingService {
 
 	public ShippingService(@Autowired ShippingRepository repository) {
 		this.repository = repository;
-	}#
+	}
 
-	@KafkaListener(topics = "order", groupId = "warehouse")
+	@KafkaListener(topics = "shipping-request", groupId = "warehouse")
 	public void receiveShippingRequest(String json) {
 		ObjectMapper mapper = new ObjectMapper();
+		ShippingDto shippingdto = new ShippingDto();
 		try {
-			Shipping shipping = mapper.readValue(json, Shipping.class);
-			this.repository.save(shipping);
+			shippingdto = mapper.readValue(json, ShippingDto.class);
+
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		Shipping shipping = getOrCreateByOrderRef(shippingdto.getOrderRef());
+
+		shipping.update(shippingdto.getOrderRef(), shippingdto.getFirstName(), shippingdto.getLastName(),
+				shippingdto.getStreet(), shippingdto.getZipCode(), shippingdto.getCity());
+
+		List<ShippingItemDto> itemsDto = shippingdto.getItems();
+		for (ShippingItemDto itemDto : itemsDto) {
+			ShippingItem item = new ShippingItem(itemDto.getArticle(), itemDto.getCount());
+			shipping.addArticle(item.getArticle(), item.getCount());
+		}
+
 		this.repository.save(shipping);
+
 	}
 
 	public Shipping updateFromOrder(UUID orderRef, String firstName, String lastName, String street, String zipCode,
