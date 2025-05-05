@@ -6,6 +6,8 @@ import java.util.UUID;
 import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import de.thi.informatik.edi.shop.warehouse.connector.dto.KafkaProducer;
+import de.thi.informatik.edi.shop.warehouse.connector.dto.PickingEvent;
 import de.thi.informatik.edi.shop.warehouse.connector.dto.ShippingDto;
 import de.thi.informatik.edi.shop.warehouse.connector.dto.ShippingItemDto;
 import de.thi.informatik.edi.shop.warehouse.model.ShippingItem;
@@ -18,11 +20,13 @@ import de.thi.informatik.edi.shop.warehouse.repositories.ShippingRepository;
 
 @Service
 public class ShippingService {
-	
+
+	private final KafkaProducer kafkaProducer;
 	private ShippingRepository repository;
 
-	public ShippingService(@Autowired ShippingRepository repository) {
+	public ShippingService(@Autowired ShippingRepository repository, KafkaProducer kafkaProducer) {
 		this.repository = repository;
+		this.kafkaProducer = kafkaProducer;
 	}
 
 	@KafkaListener(topics = "shipping-request", groupId = "warehouse")
@@ -43,9 +47,13 @@ public class ShippingService {
 		List<ShippingItemDto> itemsDto = shippingdto.getItems();
 		for (ShippingItemDto itemDto : itemsDto) {
 			ShippingItem item = new ShippingItem(itemDto.getArticle(), itemDto.getCount());
+
+			PickingEvent pickingEvent = new PickingEvent();
+			pickingEvent.setArticleId(itemDto.getArticle().toString());
+			pickingEvent.setPickedQuantity(itemDto.getCount());
+			kafkaProducer.pickingRequest(pickingEvent);
 			shipping.addArticle(item.getArticle(), item.getCount());
 		}
-
 		this.repository.save(shipping);
 
 	}
