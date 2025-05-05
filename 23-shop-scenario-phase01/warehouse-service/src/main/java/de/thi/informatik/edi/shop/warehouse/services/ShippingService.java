@@ -4,7 +4,9 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
 import de.thi.informatik.edi.shop.warehouse.model.Shipping;
@@ -17,6 +19,18 @@ public class ShippingService {
 
 	public ShippingService(@Autowired ShippingRepository repository) {
 		this.repository = repository;
+	}#
+
+	@KafkaListener(topics = "order", groupId = "warehouse")
+	public void receiveShippingRequest(String json) {
+		ObjectMapper mapper = new ObjectMapper();
+		try {
+			Shipping shipping = mapper.readValue(json, Shipping.class);
+			this.repository.save(shipping);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		this.repository.save(shipping);
 	}
 
 	public Shipping updateFromOrder(UUID orderRef, String firstName, String lastName, String street, String zipCode,

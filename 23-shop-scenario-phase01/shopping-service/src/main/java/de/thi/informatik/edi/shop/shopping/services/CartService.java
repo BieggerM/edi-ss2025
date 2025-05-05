@@ -3,6 +3,7 @@ package de.thi.informatik.edi.shop.shopping.services;
 import java.util.Optional;
 import java.util.UUID;
 
+import de.thi.informatik.edi.shop.shopping.connector.KafkaProducer;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -17,13 +18,15 @@ public class CartService {
 	
 	@Value("${cart.topic:cart}")
 	private String topic;
-	
+
+	private KafkaProducer kafkaProducer;
 	private CartRepository carts;
 	private ArticleService articles;
 
-	public CartService(@Autowired CartRepository carts, @Autowired ArticleService articles) {
+	public CartService(@Autowired CartRepository carts, @Autowired ArticleService articles, @Autowired KafkaProducer kafkaProducer) {
 		this.carts = carts;
 		this.articles = articles;
+		this.kafkaProducer= kafkaProducer;
 	}
 	
 	public UUID createCart() {
@@ -46,6 +49,9 @@ public class CartService {
 			throw new IllegalArgumentException("Article with ID " + id.toString() + " not found");
 		}
 		CartEntry entry = cart.get().addArticle(articleRef.get());
+
+
+		kafkaProducer.addCartItem(cart.get().getId(), entry);
 		this.carts.save(cart.get());
 	}
 
@@ -55,6 +61,8 @@ public class CartService {
 			throw new IllegalArgumentException("Element with ID " + id.toString() + " not found");
 		}
 		CartEntry entry = cart.get().deleteArticle(article);
+
+		kafkaProducer.deleteCartItem(id ,entry);
 		this.carts.save(cart.get());
 	}
 
@@ -63,5 +71,8 @@ public class CartService {
 		if(cart.isEmpty()) {
 			throw new IllegalArgumentException("Element with ID " + id.toString() + " not found");
 		}
+		kafkaProducer.cartFinished(cart.get().getId());
 	}
+
+
 }
